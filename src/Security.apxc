@@ -1,0 +1,188 @@
+public class Security {
+    
+    static final Integer SALT_LENGTH = 128;
+    static final String HASH_ALGORITHM = 'SHA-256';
+    static final String ENCRYPTION_ALGORITHM = 'AES256';
+    static final Integer RESET_TOKEN_LIFETIME = 3600;
+    
+    public class Hash {
+        
+        public String value { get; private set; }
+        
+        public Hash(String value) {
+            this.value = value;
+        }
+        
+        public Hash(String password, Salt salt) {
+            Blob digest = Crypto.generateDigest(HASH_ALGORITHM, Blob.valueOf(password + salt.toString()));
+            this.value =  EncodingUtil.base64Encode(digest);
+        }
+        
+        public override String toString() {
+            return this.value;
+        }
+        
+        public Boolean equals(Object that) {
+            if ( !(that instanceof Hash) ) {
+                return false;
+            } else {
+                return this.toString().equals(((Hash)that).toString());
+            }
+        }
+        
+    }
+    
+    public class Salt {
+        
+        public String value { get; private set; }
+        
+        public Salt(String value) {
+            this.value = value;
+        }
+        
+        public Salt() {
+            this(generateRandomString(SALT_LENGTH));
+        }
+        
+        public override String toString() {
+            return this.value;
+        }
+        
+        public Boolean equals(Object that) {
+            if ( !(that instanceof Salt) ) {
+                return false;
+            } else {
+                return this.toString().equals(((Salt)that).toString());
+            }
+        }
+        
+    }    
+    
+    public class HashedPassword {
+        
+        public Hash hash { get; private set; }
+        public Salt salt { get; private set; }
+
+        public HashedPassword(String password) {
+            this.salt = new Salt();
+            this.hash = new Hash(password, this.salt);
+        }
+        
+        public HashedPassword(Hash hash, Salt salt) {
+            this.hash = hash;
+            this.salt = salt;
+        }
+        
+        public HashedPassword(String password, Salt salt) {
+            this.salt = salt;
+            this.hash = new Hash(password, this.salt);
+        }
+
+        
+        public Boolean equals(String password, Salt salt) {
+            return this.equals(new HashedPassword(password, salt));
+        }
+        
+        public Boolean equals(Object that) {
+            if ( !(that instanceof HashedPassword) ) {
+                return false;
+            } else {
+            	return this.hash.toString().equals(((HashedPassword)that).hash.toString());
+            }
+        }
+
+    }
+    
+    public class Token {
+        
+        public Object obj { get; private set; }
+        private Blob privateKey  { private get; private set; }
+        
+        public Token(Object obj, String privateKeyBase64) {
+            this.obj = obj;
+            this.privateKey = EncodingUtil.base64Decode(privateKeyBase64);
+        }
+        
+        public Token(String tokenString, System.Type objectClass, String privateKeyBase64) {
+            Blob privateKey = EncodingUtil.base64Decode(privateKeyBase64);
+            Blob encryptedText = EncodingUtil.base64Decode(tokenString);
+            Blob clearText = Crypto.decryptWithManagedIV(ENCRYPTION_ALGORITHM, privateKey, encryptedText);
+            this.obj = JSON.deserialize(clearText.toString(), objectClass);
+        }
+        
+        public override String toString() {
+            Blob clearText =  Blob.valueOf(JSON.serialize(obj));
+            return EncodingUtil.base64Encode(Crypto.encryptWithManagedIV(ENCRYPTION_ALGORITHM, privateKey, clearText));
+        }
+        
+    }
+    
+    public class PasswordResetToken {
+        
+        public String userName { get; private set; }
+        public DateTime validThrough { get; private set; }
+        
+        @testVisible
+        private String saltString { private get; private set; }       
+        
+        public PasswordResetToken(Token token) {
+			this.fromToken(token);
+        }
+        
+        public PasswordResetToken(String userName) {
+            this();
+            this.userName = userName;
+            this.validThrough = DateTime.now().addSeconds(RESET_TOKEN_LIFETIME);
+        }
+		
+        public PasswordResetToken(String tokenString, String privateKeyBase64) {
+            Token token = new Token(tokenString, PasswordResetToken.Class, privateKeyBase64);
+			this.fromToken(token);
+        }
+        
+        private void fromToken(Token token) {
+            PasswordResetToken newThis = (PasswordResetToken)token.obj;
+            this.userName = newThis.userName;
+            this.validThrough = newThis.validThrough;
+            this.saltString = newThis.saltString;
+        }
+        
+        public PasswordResetToken(String userName, Integer lifeTime) {
+            this(userName);
+            this.validThrough = DateTime.now().addSeconds(lifeTime);
+        }
+        
+        public PasswordResetToken() {
+            Salt salt = new Salt();
+            this.saltString = salt.toString();
+        }
+	        
+        public Token getToken(String privateKeyBase64) {
+            return new Token(this, privateKeyBase64);
+        }
+        
+        public Boolean isValid() {
+            return String.isNotBlank(this.userName)
+                && String.isNotBlank(this.saltString)
+                && validThrough > DateTime.now();
+        }
+        
+        public Boolean isValid(String userName) {
+            return this.isValid() && this.userName == userName;
+        }
+        
+    }
+    
+    public static String generateRandomString(Integer length) {
+        final String alphabetString = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz';
+        String randomString = '';
+        while (randomString.length() < length) {
+           Integer offset = Math.mod(Math.abs(Crypto.getRandomInteger()), alphabetString.length());
+           randomString += alphabetString.substring(offset, offset+1);
+        }
+        return randomString; 
+	}
+    
+    
+    
+}
