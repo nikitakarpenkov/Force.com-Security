@@ -26,7 +26,11 @@ public class Security {
             if ( !(that instanceof Hash) ) {
                 return false;
             } else {
-                return this.toString().equals(((Hash)that).toString());
+                Hash thatHash = (Hash)that;
+                if (this.toString() == null || thatHash.toString() == null) {
+                    return false;
+                }
+                return this.toString().equals(thatHash.toString());
             }
         }
         
@@ -62,7 +66,7 @@ public class Security {
         
         public Hash hash { get; private set; }
         public Salt salt { get; private set; }
-
+        
         public HashedPassword(String password) {
             this.salt = new Salt();
             this.hash = new Hash(password, this.salt);
@@ -77,7 +81,10 @@ public class Security {
             this.salt = salt;
             this.hash = new Hash(password, this.salt);
         }
-
+        
+        public Boolean equals(String password) {
+            return this.equals(new HashedPassword(password, this.salt));
+        }
         
         public Boolean equals(String password, Salt salt) {
             return this.equals(new HashedPassword(password, salt));
@@ -87,10 +94,14 @@ public class Security {
             if ( !(that instanceof HashedPassword) ) {
                 return false;
             } else {
-            	return this.hash.toString().equals(((HashedPassword)that).hash.toString());
+                HashedPassword thatHashedPassword = (HashedPassword)that;
+                if (this.hash == null || thatHashedPassword == null || thatHashedPassword.hash == null) {
+                    return false;
+                }
+                return this.hash.equals(thatHashedPassword.hash);
             }
         }
-
+        
     }
     
     public class Token {
@@ -117,58 +128,63 @@ public class Security {
         
     }
     
-    public class PasswordResetToken {
+    public class SessionToken {
         
-        public String userName { get; private set; }
+        public String key { get; private set; }
         public DateTime validThrough { get; private set; }
         
         @testVisible
         private String saltString { private get; private set; }       
         
-        public PasswordResetToken(Token token) {
-			this.fromToken(token);
+        public SessionToken(Token token) {
+            this.fromToken(token);
         }
         
-        public PasswordResetToken(String userName) {
+        public SessionToken(String key) {
             this();
-            this.userName = userName;
+            this.key = key;
             this.validThrough = DateTime.now().addSeconds(RESET_TOKEN_LIFETIME);
         }
-		
-        public PasswordResetToken(String tokenString, String privateKeyBase64) {
-            Token token = new Token(tokenString, PasswordResetToken.Class, privateKeyBase64);
-			this.fromToken(token);
+        
+        public SessionToken(String tokenString, String privateKeyBase64) {
+            Token token = new Token(tokenString, SessionToken.Class, privateKeyBase64);
+            this.fromToken(token);
         }
         
         private void fromToken(Token token) {
-            PasswordResetToken newThis = (PasswordResetToken)token.obj;
-            this.userName = newThis.userName;
+            SessionToken newThis = (SessionToken)token.obj;
+            this.key = newThis.key;
             this.validThrough = newThis.validThrough;
             this.saltString = newThis.saltString;
         }
         
-        public PasswordResetToken(String userName, Integer lifeTime) {
-            this(userName);
+        public SessionToken(String key, Integer lifeTime) {
+            this(key);
             this.validThrough = DateTime.now().addSeconds(lifeTime);
         }
         
-        public PasswordResetToken() {
+        public SessionToken(String key, DateTime validThrough) {
+            this(key);
+            this.validThrough = validThrough;
+        }
+        
+        public SessionToken() {
             Salt salt = new Salt();
             this.saltString = salt.toString();
         }
-	        
+        
         public Token getToken(String privateKeyBase64) {
             return new Token(this, privateKeyBase64);
         }
         
         public Boolean isValid() {
-            return String.isNotBlank(this.userName)
+            return String.isNotBlank(this.key)
                 && String.isNotBlank(this.saltString)
                 && validThrough > DateTime.now();
         }
         
-        public Boolean isValid(String userName) {
-            return this.isValid() && this.userName == userName;
+        public Boolean isValid(String key) {
+            return this.isValid() && this.key == key;
         }
         
     }
@@ -177,11 +193,11 @@ public class Security {
         final String alphabetString = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789abcdefghijklmnopqrstuvwxyz';
         String randomString = '';
         while (randomString.length() < length) {
-           Integer offset = Math.mod(Math.abs(Crypto.getRandomInteger()), alphabetString.length());
-           randomString += alphabetString.substring(offset, offset+1);
+            Integer offset = Math.mod(Math.abs(Crypto.getRandomInteger()), alphabetString.length());
+            randomString += alphabetString.substring(offset, offset+1);
         }
         return randomString; 
-	}
+    }
     
     
     

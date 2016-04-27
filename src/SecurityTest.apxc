@@ -1,32 +1,32 @@
 @isTest
 public class SecurityTest {
-	
+    /*
     private class TestUser {
         
         public String hash { get; set; }
         public String salt { get; set; }
         
     }
-    
+    */
     @isTest
     static void completeTest() {
         
         // Generate and save hash + salt
         String password = 'qwerty';
         Security.HashedPassword newHashedPassword = new Security.HashedPassword(password);
-        TestUser testUser = new TestUser();
-        testUser.salt = newHashedPassword.salt.toString();
-        testUser.hash = newHashedPassword.hash.toString();
+        
+        String userSalt = newHashedPassword.salt.toString();
+        String userHash = newHashedPassword.hash.toString();
         
         // Retreive hash + salt from database
-        Security.HashedPassword retreivedHashedPassword = new Security.HashedPassword(new Security.Hash(testUser.hash), new Security.Salt(testUser.salt));
+        Security.HashedPassword retreivedHashedPassword = new Security.HashedPassword(new Security.Hash(userHash), new Security.Salt(userSalt));
         
         // Validate wrong password
         String wrongPassword = 'password';
-        System.assert(!retreivedHashedPassword.equals(wrongPassword, new Security.Salt(testUser.salt)));
+        System.assert(!retreivedHashedPassword.equals(wrongPassword));
         
         // Validate correct password
-        System.assert(retreivedHashedPassword.equals(password, new Security.Salt(testUser.salt)));
+        System.assert(retreivedHashedPassword.equals(password));
         
     }
     
@@ -51,19 +51,19 @@ public class SecurityTest {
     }
     
     @isTest
-    static void PasswordResetTokenTest() {
+    static void SessionTokenTest() {
         
         // Create reset password token
         String privateKeyBase64 = 'JnrKGpIKC8NTADJGmIs6giCKG5AgFbbe007x+TgkhOs=';
-        Security.PasswordResetToken passwordResetToken = new Security.PasswordResetToken('test@test.com', 43200);
-        Security.Token token = passwordResetToken.getToken(privateKeyBase64);
+        Security.SessionToken sessionToken = new Security.SessionToken('test@test.com', 43200);
+        Security.Token token = sessionToken.getToken(privateKeyBase64);
         String tokenString = token.toString();
-		
+        
         // Decode and validate token
-        Security.PasswordResetToken retreivedResetToken = new Security.PasswordResetToken(tokenString, privateKeyBase64);
-        System.assertEquals(passwordResetToken.userName, retreivedResetToken.userName);
-        System.assertEquals(passwordResetToken.validThrough, retreivedResetToken.validThrough);
-        System.assertEquals(passwordResetToken.saltString, retreivedResetToken.saltString);
+        Security.SessionToken retreivedResetToken = new Security.SessionToken(tokenString, privateKeyBase64);
+        System.assertEquals(sessionToken.key, retreivedResetToken.key);
+        System.assertEquals(sessionToken.validThrough, retreivedResetToken.validThrough);
+        System.assertEquals(sessionToken.saltString, retreivedResetToken.saltString);
         System.assert(!retreivedResetToken.isValid('someoneelse@test.com'));
         System.assert(retreivedResetToken.isValid('test@test.com'));
         
